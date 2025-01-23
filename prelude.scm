@@ -2578,12 +2578,7 @@
             ((not (pair? xs))
               y)))
 
-        (define (relaxed-map f xs)
-          (if (pair? xs)
-            (cons
-              (f (car xs))
-              (relaxed-map f (cdr xs)))
-            (f xs)))
+        ($$relaxed-map)
 
         (define (relaxed-deep-map f xs)
           (if (pair? xs)
