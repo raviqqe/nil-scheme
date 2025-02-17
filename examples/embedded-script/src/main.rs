@@ -67,10 +67,10 @@ fn run_scheme(module: &'static UniversalModule) -> Result<(), EngineError> {
     let mut heap = [Default::default(); HEAP_SIZE];
     // Define Rust functions to pass to the engine.
     let mut functions = [
-        r#fn(Person::new),
-        r#fn::<(Ref<_>,), _>(Person::pies),
-        r#fn::<(Ref<_>,), _>(Person::wasted),
-        r#fn(Person::throw_pie),
+        ("make-person", r#fn(Person::new)),
+        ("person-pies", r#fn::<(Ref<_>,), _>(Person::pies)),
+        ("person-wasted", r#fn::<(Ref<_>,), _>(Person::wasted)),
+        ("person-throw-pie", r#fn(Person::throw_pie)),
     ];
     // Initialize the engine.
     let mut engine = Engine::new(&mut heap, &mut functions)?;

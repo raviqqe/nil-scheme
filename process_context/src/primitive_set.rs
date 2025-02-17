@@ -2,7 +2,7 @@ mod primitive;
 
 pub use self::primitive::Primitive;
 use crate::ProcessContext;
-use stak_vm::{Cons, Error, Memory, Number, PrimitiveSet};
+use stak_vm::{Error, Memory, PrimitiveSet};
 
 /// A primitive set for process context.
 pub struct ProcessContextPrimitiveSet<T: ProcessContext> {
@@ -13,16 +13,6 @@ impl<T: ProcessContext> ProcessContextPrimitiveSet<T> {
     /// Creates a primitive set.
     pub const fn new(process_context: T) -> Self {
         Self { process_context }
-    }
-
-    fn build_string(memory: &mut Memory, string: &str) -> Result<Cons, Error> {
-        let mut list = memory.null();
-
-        for character in string.chars().rev() {
-            list = memory.cons(Number::from_i64(character as _).into(), list)?;
-        }
-
-        Ok(list)
     }
 }
 
@@ -35,7 +25,7 @@ impl<T: ProcessContext> PrimitiveSet for ProcessContextPrimitiveSet<T> {
                 memory.set_register(memory.null());
 
                 for argument in self.process_context.command_line_rev() {
-                    let string = Self::build_string(memory, argument)?;
+                    let string = memory.build_string(argument)?;
                     let list = memory.cons(string.into(), memory.register())?;
                     memory.set_register(list);
                 }
@@ -50,10 +40,10 @@ impl<T: ProcessContext> PrimitiveSet for ProcessContextPrimitiveSet<T> {
                     let list = memory.cons(pair.into(), memory.register())?;
                     memory.set_register(list);
 
-                    let string = Self::build_string(memory, key)?;
+                    let string = memory.build_string(key)?;
                     memory.set_car_value(memory.car(memory.register()), string.into());
 
-                    let string = Self::build_string(memory, value)?;
+                    let string = memory.build_string(value)?;
                     memory.set_cdr_value(memory.car(memory.register()), string.into());
                 }
 

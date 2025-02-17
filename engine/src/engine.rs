@@ -11,7 +11,10 @@ pub struct Engine<'a, 'b> {
 
 impl<'a, 'b> Engine<'a, 'b> {
     /// Creates a scripting engine.
-    pub fn new(heap: &'a mut [Value], functions: &'a mut [AnyFn<'b>]) -> Result<Self, Error> {
+    pub fn new(
+        heap: &'a mut [Value],
+        functions: &'a mut [(&'a str, AnyFn<'b>)],
+    ) -> Result<Self, Error> {
         Ok(Self {
             vm: Vm::new(heap, EnginePrimitiveSet::new(functions))?,
         })

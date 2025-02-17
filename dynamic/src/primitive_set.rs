@@ -16,20 +16,21 @@ type SchemeType = (
 
 /// A dynamic primitive set equipped with native functions in Rust.
 pub struct DynamicPrimitiveSet<'a, 'b> {
-    functions: &'a mut [AnyFn<'b>],
+    functions: &'a mut [(&'a str, AnyFn<'b>)],
     types: Vec<SchemeType>,
     values: Vec<Option<any_fn::Value>>,
 }
 
 impl<'a, 'b> DynamicPrimitiveSet<'a, 'b> {
     /// Creates a primitive set.
-    pub fn new(functions: &'a mut [AnyFn<'b>]) -> Self {
+    pub fn new(functions: &'a mut [(&'a str, AnyFn<'b>)]) -> Self {
         let mut set = Self {
             functions,
             types: vec![],
             values: vec![],
         };
 
+        // TODO Support more types including `()` and `Vec<u8>`.
         set.register_type::<bool>();
         set.register_type::<i8>();
         set.register_type::<u8>();
@@ -151,67 +152,85 @@ impl PrimitiveSet for DynamicPrimitiveSet<'_, '_> {
     type Error = DynamicError;
 
     fn operate(&mut self, memory: &mut Memory, primitive: usize) -> Result<(), Self::Error> {
-        let function = self
-            .functions
-            .get(primitive)
-            .ok_or(Error::IllegalPrimitive)?;
+        if primitive == 0 {
+            memory.set_register(memory.null());
 
-        let mut arguments = (0..function.arity())
-            .map(|_| memory.pop())
-            .collect::<ArgumentVec<_>>();
-        arguments.reverse();
+            for (name, _) in self.functions.iter() {
+                let list = memory.cons(memory.null().into(), memory.register())?;
+                memory.set_register(list);
+                let string = memory.build_string(name)?;
+                memory.set_car(memory.register(), string.into());
+            }
 
-        let cloned_arguments = {
-            arguments
-                .iter()
-                .enumerate()
-                .map(|(index, &value)| {
-                    self.convert_from_scheme(memory, value, function.parameter_types()[index])
-                })
-                .collect::<ArgumentVec<_>>()
-        };
+            memory.push(memory.register().into())?;
 
-        let mut copied_arguments = ArgumentVec::new();
+            Ok(())
+        } else {
+            let primitive = primitive - 1;
+            let (_, function) = self
+                .functions
+                .get(primitive)
+                .ok_or(Error::IllegalPrimitive)?;
 
-        for &value in &arguments {
-            let value = if value.is_cons() && memory.cdr_value(value).tag() == Type::Foreign as _ {
-                Some(
-                    self.values
-                        .get(memory.car_value(value).assume_number().to_i64() as usize)
-                        .ok_or(DynamicError::ValueIndex)?
-                        .as_ref()
-                        .ok_or(DynamicError::ValueIndex)?,
-                )
-            } else {
-                None
+            let mut arguments = (0..function.arity())
+                .map(|_| memory.pop())
+                .collect::<ArgumentVec<_>>();
+            arguments.reverse();
+
+            let cloned_arguments = {
+                arguments
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &value)| {
+                        self.convert_from_scheme(memory, value, function.parameter_types()[index])
+                    })
+                    .collect::<ArgumentVec<_>>()
             };
 
-            copied_arguments
-                .push(value)
-                .map_err(|_| Error::ArgumentCount)?;
-        }
+            let mut copied_arguments = ArgumentVec::new();
 
-        let value = self
-            .functions
-            .get_mut(primitive)
-            .ok_or(Error::IllegalPrimitive)?
-            .call(
+            for &value in &arguments {
+                let value =
+                    if value.is_cons() && memory.cdr_value(value).tag() == Type::Foreign as _ {
+                        Some(
+                            self.values
+                                .get(memory.car_value(value).assume_number().to_i64() as usize)
+                                .ok_or(DynamicError::ValueIndex)?
+                                .as_ref()
+                                .ok_or(DynamicError::ValueIndex)?,
+                        )
+                    } else {
+                        None
+                    };
+
                 copied_arguments
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, value)| {
-                        cloned_arguments[index]
-                            .as_ref()
-                            .map_or_else(|| value.ok_or(DynamicError::ForeignValueExpected), Ok)
-                    })
-                    .collect::<Result<ArgumentVec<_>, DynamicError>>()?
-                    .as_slice(),
-            )?;
+                    .push(value)
+                    .map_err(|_| Error::ArgumentCount)?;
+            }
 
-        let value = self.convert_into_scheme(memory, value)?;
-        memory.push(value)?;
+            let value = self
+                .functions
+                .get_mut(primitive)
+                .ok_or(Error::IllegalPrimitive)?
+                .1
+                .call(
+                    copied_arguments
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, value)| {
+                            cloned_arguments[index]
+                                .as_ref()
+                                .map_or_else(|| value.ok_or(DynamicError::ForeignValueExpected), Ok)
+                        })
+                        .collect::<Result<ArgumentVec<_>, DynamicError>>()?
+                        .as_slice(),
+                )?;
 
-        Ok(())
+            let value = self.convert_into_scheme(memory, value)?;
+            memory.push(value)?;
+
+            Ok(())
+        }
     }
 }
 
@@ -253,9 +272,9 @@ mod tests {
     #[test]
     fn create() {
         let mut functions = [
-            r#fn(Foo::new),
-            r#fn::<(Ref<_>,), _>(Foo::bar),
-            r#fn(Foo::baz),
+            ("make-foo", r#fn(Foo::new)),
+            ("foo-bar", r#fn::<(Ref<_>,), _>(Foo::bar)),
+            ("foo-baz", r#fn(Foo::baz)),
         ];
 
         DynamicPrimitiveSet::new(&mut functions);
@@ -300,11 +319,11 @@ mod tests {
         #[test]
         fn collect_one() {
             let mut heap = [Default::default(); HEAP_SIZE];
-            let mut functions = [r#fn(|| Foo { bar: 42 })];
+            let mut functions = [("make-foo", r#fn(|| Foo { bar: 42 }))];
             let mut primitive_set = DynamicPrimitiveSet::new(&mut functions);
             let mut memory = Memory::new(&mut heap).unwrap();
 
-            primitive_set.operate(&mut memory, 0).unwrap();
+            primitive_set.operate(&mut memory, 1).unwrap();
 
             assert_eq!(primitive_set.find_free(), None);
 
@@ -318,11 +337,11 @@ mod tests {
         #[test]
         fn keep_one() {
             let mut heap = [Default::default(); HEAP_SIZE];
-            let mut functions = [r#fn(|| Foo { bar: 42 })];
+            let mut functions = [("make-foo", r#fn(|| Foo { bar: 42 }))];
             let mut primitive_set = DynamicPrimitiveSet::new(&mut functions);
             let mut memory = Memory::new(&mut heap).unwrap();
 
-            primitive_set.operate(&mut memory, 0).unwrap();
+            primitive_set.operate(&mut memory, 1).unwrap();
 
             assert_eq!(primitive_set.find_free(), None);
 

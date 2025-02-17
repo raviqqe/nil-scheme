@@ -26,7 +26,7 @@ pub struct EnginePrimitiveSet<'a, 'b> {
 
 impl<'a, 'b> EnginePrimitiveSet<'a, 'b> {
     /// Creates a primitive set.
-    pub fn new(functions: &'a mut [AnyFn<'b>]) -> Self {
+    pub fn new(functions: &'a mut [(&'a str, AnyFn<'b>)]) -> Self {
         Self {
             small: SmallPrimitiveSet::new(
                 Default::default(),

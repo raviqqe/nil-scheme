@@ -3369,22 +3369,13 @@
     (define environment list)))
 
 (define-library (stak rust)
-  (export define-rust)
-
-  (import
-    (only (stak base) primitive)
-    (scheme base))
+  (import (stak base) (scheme base))
 
   (begin
-    (define-syntax define-rust
-      (syntax-rules ()
-        ((_ "count" index name1 name2 ...)
-          (begin
-            (define name1 (primitive index))
-            (define-rust "count" (+ index 1) name2 ...)))
-
-        ((_ "count" index)
-          #f)
-
-        ((_ name1 name2 ...)
-          (define-rust "count" 1000 name1 name2 ...))))))
+    (do ((names ((primitive 1000)) (cdr names))
+         (index 1 (+ index 1)))
+      ((null? names))
+      (let ((name (car names)))
+        (set-car!
+          (string->symbol (data-rib string-type (length name) name))
+          (primitive (+ 1000 index)))))))

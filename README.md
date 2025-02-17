@@ -49,15 +49,6 @@ First, prepare a Scheme script named `src/fight.scm`:
 ; Import a base library and the library named `(stak rust)` for Rust integration.
 (import (scheme base) (stak rust))
 
-; Use the `define-rust` procedure to import native functions written in Rust.
-; The order of the functions should match the ones passed into the `Engine::new()`
-; function in Rust.
-(define-rust
-  make-person
-  person-pies
-  person-wasted
-  person-throw-pie)
-
 ; Make two people with a number of pies they have and their dodge rates.
 (define me (make-person 4 0.2))
 (define friend (make-person 2 0.6))
@@ -165,10 +156,10 @@ fn run_scheme(module: &'static UniversalModule) -> Result<(), EngineError> {
     let mut heap = [Default::default(); HEAP_SIZE];
     // Define Rust functions to pass to the engine.
     let mut functions = [
-        r#fn(Person::new),
-        r#fn::<(Ref<_>,), _>(Person::pies),
-        r#fn::<(Ref<_>,), _>(Person::wasted),
-        r#fn(Person::throw_pie),
+        ("make-person", r#fn(Person::new)),
+        ("person-pies", r#fn::<(Ref<_>,), _>(Person::pies)),
+        ("person-wasted", r#fn::<(Ref<_>,), _>(Person::wasted)),
+        ("person-throw-pie", r#fn(Person::throw_pie)),
     ];
     // Initialize the engine.
     let mut engine = Engine::new(&mut heap, &mut functions)?;

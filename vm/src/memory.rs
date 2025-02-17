@@ -366,6 +366,17 @@ impl<'a> Memory<'a> {
         list
     }
 
+    /// Builds a string.
+    pub fn build_string(&mut self, string: &str) -> Result<Cons, Error> {
+        let mut list = self.null();
+
+        for character in string.chars().rev() {
+            list = self.cons(Number::from_i64(character as _).into(), list)?;
+        }
+
+        Ok(list)
+    }
+
     /// Executes an operation against a value at the top of a stack.
     pub fn operate_top(&mut self, operate: impl Fn(&Self, Value) -> Value) -> Result<(), Error> {
         let value = self.pop();
